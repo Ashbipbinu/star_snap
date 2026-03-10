@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme{
+
+--color-twilight-indigo-50: #eeeff7;
+--color-twilight-indigo-100: #dddeee;
+--color-twilight-indigo-200: #babdde;
+--color-twilight-indigo-300: #989ccd;
+--color-twilight-indigo-400: #757bbd;
+--color-twilight-indigo-500: #535aac;
+--color-twilight-indigo-600: #42488a;
+--color-twilight-indigo-700: #323667;
+--color-twilight-indigo-800: #212445;
+--color-twilight-indigo-900: #111222;
+--color-twilight-indigo-950: #0c0d18;
+
+--color-space-indigo-50: #ededf8;
+--color-space-indigo-100: #dadcf1;
+--color-space-indigo-200: #b6b9e2;
+--color-space-indigo-300: #9195d4;
+--color-space-indigo-400: #6c72c6;
+--color-space-indigo-500: #474fb8;
+--color-space-indigo-600: #393f93;
+--color-space-indigo-700: #2b2f6e;
+--color-space-indigo-800: #1d2049;
+--color-space-indigo-900: #0e1025;
+--color-space-indigo-950: #0a0b1a;
+
+--color-dusty-mauve-50: #f4f0f4;
+--color-dusty-mauve-100: #eae1e9;
+--color-dusty-mauve-200: #d5c3d3;
+--color-dusty-mauve-300: #c0a5bc;
+--color-dusty-mauve-400: #aa88a6;
+--color-dusty-mauve-500: #956a90;
+--color-dusty-mauve-600: #775573;
+--color-dusty-mauve-700: #5a3f56;
+--color-dusty-mauve-800: #3c2a3a;
+--color-dusty-mauve-900: #1e151d;
+--color-dusty-mauve-950: #150f14;
+
+--color-bitter-chocolate-50: #f6eeee;
+--color-bitter-chocolate-100: #eeddde;
+--color-bitter-chocolate-200: #dcbcbd;
+--color-bitter-chocolate-300: #cb9a9c;
+--color-bitter-chocolate-400: #ba787b;
+--color-bitter-chocolate-500: #a85759;
+--color-bitter-chocolate-600: #874548;
+--color-bitter-chocolate-700: #653436;
+--color-bitter-chocolate-800: #432324;
+--color-bitter-chocolate-900: #221112;
+--color-bitter-chocolate-950: #180c0d;
+
+--color-lilac-50: #f6eff5;
+--color-lilac-100: #ecdfeb;
+--color-lilac-200: #dabed6;
+--color-lilac-300: #c79ec2;
+--color-lilac-400: #b57dad;
+--color-lilac-500: #a25d99;
+--color-lilac-600: #824a7a;
+--color-lilac-700: #61385c;
+--color-lilac-800: #41253d;
+--color-lilac-900: #20131f;
+--color-lilac-950: #170d15;
+
+}
