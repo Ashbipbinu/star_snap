@@ -139,7 +139,7 @@ npm -v
 Clone the repository:
 
 ```
-git clone <repository-url>
+git clone https://github.com/Ashbipbinu/star_snap.git
 ```
 
 Navigate to the project folder:
