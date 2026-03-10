@@ -9,6 +9,7 @@ import Messi_scale from "/messi_scale.png";
 import Ronaldo_scale from "/ronaldo_scale.png";
 import Michael from "/michael.png";
 import michael_scale from "/michael_scale.png";
+import Neymar from "/Neymar.png";
 import neymar_scale from "/neymar_scale.png";
 
 import DownloadModal from "./Modal";
@@ -71,7 +72,7 @@ export default function Camera() {
     { id: 1, name: "Ronaldo", url: Ronaldo, scale: Ronaldo_scale },
     { id: 2, name: "Messi", url: Messi, scale: Messi_scale },
     { id: 3, name: "Michael Jackson", url: Michael, scale: michael_scale },
-    { id: 4, name: "Neymar", url: Messi, scale: neymar_scale },
+    { id: 4, name: "Neymar", url: Neymar, scale: neymar_scale },
   ];
 
   // --- DRAG END HANDLER ---
