@@ -139,7 +139,7 @@ npm -v
 Clone the repository:
 
 ```
-git clone <repository-url>
+git clone https://github.com/Ashbipbinu/star_snap.git
 ```
 
 Navigate to the project folder:
@@ -350,7 +350,6 @@ This allows Electron to securely load files from the `dist` folder.
 The application allows:
 
 * Camera access
-* Microphone access
 
 Permissions are managed using Electron session handlers in `main.js`.
 
