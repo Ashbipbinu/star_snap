@@ -33,7 +33,7 @@ export default function DownloadModal({ isOpen, onClose, imageData }) {
         {
           method: "POST",
           body: formData,
-        }
+        },
       );
 
       const data = await response.json();
@@ -41,20 +41,22 @@ export default function DownloadModal({ isOpen, onClose, imageData }) {
 
       const downloadUrl = data.secure_url.replace(
         "/upload/",
-        "/upload/fl_attachment/"
+        "/upload/fl_attachment/",
       );
       setCloudinaryUrl(downloadUrl);
       return data;
     })();
 
     // 2. Wrap the task in toast.promise and ensure spinner stops on finally
-    toast.promise(uploadTask, {
-      loading: 'Uploading to cloud...',
-      success: 'Successfully uploaded!',
-      error: (err) => `Error: ${err.message}`,
-    }).finally(() => {
-      setIsUploading(false);
-    });
+    toast
+      .promise(uploadTask, {
+        loading: "Uploading to cloud...",
+        success: "Successfully uploaded!",
+        error: (err) => `Error: ${err.message}`,
+      })
+      .finally(() => {
+        setIsUploading(false);
+      });
   };
 
   if (!imageData) return null;
