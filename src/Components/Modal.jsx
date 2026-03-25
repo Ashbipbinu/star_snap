@@ -8,7 +8,7 @@ export default function DownloadModal({ isOpen, onClose, imageData }) {
   const [isUploading, setIsUploading] = useState(false);
 
   // Cloudinary Configuration
-  const CLOUD_NAME = "ashbi-cloud";
+  const CLOUD_NAME = "dxxvqrmut";
   const UPLOAD_PRESET = "snap_star";
 
   useEffect(() => {
