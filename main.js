@@ -1,12 +1,10 @@
-import { app, BrowserWindow, protocol, net, session } from "electron";
+import { app, BrowserWindow, protocol, net, session, Menu } from "electron"; // Added Menu import
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Fix __dirname in ES module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Register custom protocol BEFORE ready
 protocol.registerSchemesAsPrivileged([
   {
     scheme: "app",
@@ -19,8 +17,49 @@ protocol.registerSchemesAsPrivileged([
   }
 ]);
 
-function createWindow() {
+// Updated to use the modern Async method
+async function createPrinterMenu(win) {
+  try {
+    // getPrinters() is deprecated in newer Electron; use getPrintersAsync()
+    const printers = await win.webContents.getPrintersAsync();
 
+    const printerMenuItems = printers.map((printer) => ({
+      label: printer.name,
+      type: "radio",
+      checked: printer.isDefault,
+      click: () => {
+        win.webContents.send("printer-selected", printer.name);
+      }
+    }));
+
+    const template = [
+      {
+        label: "Settings",
+        submenu: [
+          {
+            label: "Connect Printer",
+            submenu: printerMenuItems.length > 0 
+              ? printerMenuItems 
+              : [{ label: "No Printers Found", enabled: false }]
+          },
+          { type: "separator" },
+          { label: "Reload Printers", click: () => createPrinterMenu(win) },
+          { type: "separator" },
+          { role: "quit" }
+        ]
+      },
+      { label: "Edit", role: "editMenu" },
+      { label: "View", role: "viewMenu" }
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+  } catch (err) {
+    console.error("Failed to get printers:", err);
+  }
+}
+
+function createWindow() {
   const win = new BrowserWindow({
     width: 1000,
     height: 800,
@@ -36,27 +75,21 @@ function createWindow() {
     : "http://localhost:5173";
 
   win.loadURL(startUrl);
+
+  // Build the menu once the window is ready
+  win.webContents.on("did-finish-load", () => {
+    createPrinterMenu(win);
+  });
 }
 
 app.whenReady().then(() => {
-
-  // Serve files from dist
   protocol.handle("app", (request) => {
-
     const url = new URL(request.url);
-
-    let filePath = url.pathname;
-
-    if (filePath === "/") {
-      filePath = "/index.html";
-    }
-
+    let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
     const fullPath = path.join(__dirname, "dist", filePath);
-
     return net.fetch(`file://${fullPath}`);
   });
 
-  // Camera/Mic permissions
   session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
     return permission === "media" || permission === "camera";
   });
@@ -70,7 +103,6 @@ app.whenReady().then(() => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
-
 });
 
 app.on("window-all-closed", () => {
