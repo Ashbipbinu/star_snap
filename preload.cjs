@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 console.log("Preload script loaded");
 
 let printerListener = null;
+let printResultListener = null;
 
 contextBridge.exposeInMainWorld("electron", {
   onPrinterSelected: (callback) => {
@@ -11,7 +12,7 @@ contextBridge.exposeInMainWorld("electron", {
     }
 
     printerListener = (_event, value) => {
-      console.log("Preload received:", value);
+      console.log("Preload received printer:", value);
       callback(value);
     };
 
@@ -25,8 +26,29 @@ contextBridge.exposeInMainWorld("electron", {
     };
   },
 
+  //  listen for print success/failure from main process
+  onPrintResult: (callback) => {
+    if (printResultListener) {
+      ipcRenderer.removeListener("print-result", printResultListener);
+    }
+
+    printResultListener = (_event, value) => {
+      console.log("Preload received print result:", value);
+      callback(value);
+    };
+
+    ipcRenderer.on("print-result", printResultListener);
+
+    return () => {
+      if (printResultListener) {
+        ipcRenderer.removeListener("print-result", printResultListener);
+        printResultListener = null;
+      }
+    };
+  },
+
   printImage: (data) => {
-    console.log("Sending print:", data);
+    console.log("Sending print:", data.printerName);
     ipcRenderer.send("print-image", data);
   },
 

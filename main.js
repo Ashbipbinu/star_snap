@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let mainWindow; 
+let mainWindow;
 let selectedPrinter = "";
 
 protocol.registerSchemesAsPrivileged([
@@ -31,17 +31,15 @@ function isVirtualPrinter(name) {
   );
 }
 
-// ✅ ALWAYS SEND TO MAIN WINDOW
 function sendToRenderer(channel, data) {
   if (mainWindow && mainWindow.webContents) {
-    console.log(" Sending to React:", data);
+    console.log("Sending to React:", data);
     mainWindow.webContents.send(channel, data);
   } else {
     console.error("mainWindow not available");
   }
 }
 
-// 🔥 Printer Menu
 async function createPrinterMenu() {
   try {
     const printers = await mainWindow.webContents.getPrintersAsync();
@@ -49,15 +47,23 @@ async function createPrinterMenu() {
     const printerMenuItems = printers.map((printer) => ({
       label: printer.name,
       type: "radio",
-      checked: printer.name === selectedPrinter || printer.isDefault,
+      checked: printer.name === selectedPrinter || (!selectedPrinter && printer.isDefault),
       click: () => {
         selectedPrinter = printer.name;
-
         console.log("Selected:", printer.name);
-
         sendToRenderer("printer-selected", printer.name);
       }
     }));
+
+    // Auto-select default printer on first load
+    if (!selectedPrinter) {
+      const defaultPrinter = printers.find((p) => p.isDefault);
+      if (defaultPrinter) {
+        selectedPrinter = defaultPrinter.name;
+        console.log("Auto-selected default printer:", selectedPrinter);
+        sendToRenderer("printer-selected", selectedPrinter);
+      }
+    }
 
     const template = [
       {
@@ -86,40 +92,111 @@ async function createPrinterMenu() {
   }
 }
 
-//  expose current printer
 ipcMain.handle("get-selected-printer", () => selectedPrinter);
 
-//  PRINT
-ipcMain.on("print-image", async (_, { image, printerName }) => {
-  const printWindow = new BrowserWindow({ show: false });
+// ✅ FIXED: robust print using loadURL with a print-specific scheme
+ipcMain.on("print-image", async (event, { image, printerName }) => {
+  console.log("Print request received for printer:", printerName);
 
-  await printWindow.loadURL(`
-    data:text/html,
-    <html>
-      <body style="margin:0;display:flex;justify-content:center;align-items:center;height:100vh;">
-        <img src="${image}" style="max-width:100%;max-height:100%;" />
-      </body>
-    </html>
-  `);
-
-  printWindow.webContents.on("did-finish-load", () => {
-    const virtual = isVirtualPrinter(printerName);
-
-    printWindow.webContents.print(
-      {
-        silent: !virtual,
-        deviceName: printerName
-      },
-      () => printWindow.close()
-    );
+  const printWindow = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
   });
+
+  // ✅ Build a clean HTML string and load it via loadURL as a data URI
+  // Use encodeURIComponent to safely embed into data: URL
+  const htmlContent = `<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%;
+        height: 100%;
+      }
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: white;
+      }
+      img {
+        width: 100%;
+        height: auto;
+        display: block;
+        object-fit: contain;
+      }
+      @page {
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <img id="photo" src="${image}" />
+    <script>
+      // Signal when image is fully loaded and rendered
+      const img = document.getElementById('photo');
+      if (img.complete) {
+        document.title = 'ready';
+      } else {
+        img.onload = () => { document.title = 'ready'; };
+        img.onerror = () => { document.title = 'error'; };
+      }
+    </script>
+  </body>
+</html>`;
+
+  // ✅ Use loadURL with data: URI — works reliably for base64 images
+  await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+
+  // ✅ Wait for the image to signal it's ready via title change
+  await new Promise((resolve) => {
+    const checkReady = setInterval(() => {
+      const title = printWindow.webContents.getTitle();
+      if (title === "ready" || title === "error") {
+        clearInterval(checkReady);
+        resolve();
+      }
+    }, 100);
+
+    // Fallback: proceed after 4 seconds regardless
+    setTimeout(() => {
+      clearInterval(checkReady);
+      resolve();
+    }, 4000);
+  });
+
+  const virtual = isVirtualPrinter(printerName);
+  console.log("Printing to:", printerName, "| Silent:", !virtual);
+
+  printWindow.webContents.print(
+    {
+      silent: !virtual,         // silent=true for real printers, show dialog for virtual (PDF etc.)
+      printBackground: true,
+      deviceName: printerName,
+      pageSize: "A4",           // Change to "4x6" or custom size if using photo paper
+      margins: {
+        marginType: "none"      // No margins — full bleed photo print
+      },
+      scaleFactor: 100
+    },
+    (success, failureReason) => {
+      if (success) {
+        console.log("Print job sent successfully");
+        event.sender.send("print-result", { success: true });
+      } else {
+        console.error("Print failed:", failureReason);
+        event.sender.send("print-result", { success: false, reason: failureReason });
+      }
+      printWindow.close();
+    }
+  );
 });
 
 function createWindow() {
-  const preloadPath = path.resolve(__dirname, "preload.js");
-
-  console.log("PRELOAD PATH:", preloadPath);
-
   mainWindow = new BrowserWindow({
     width: 1000,
     height: 800,
@@ -127,7 +204,7 @@ function createWindow() {
       preload: path.resolve(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false  
+      sandbox: false
     }
   });
 

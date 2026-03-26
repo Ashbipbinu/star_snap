@@ -5,9 +5,8 @@ import toast from "react-hot-toast";
 export default function ResultPanel({ imageData, onReset, isLandscape }) {
   const [cloudinaryUrl, setCloudinaryUrl] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-
-  // ✅ NEW: store selected printer
   const [selectedPrinter, setSelectedPrinter] = useState("");
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const CLOUD_NAME = "ashbi-cloud";
   const UPLOAD_PRESET = "snap_star";
@@ -20,10 +19,8 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
     }
   }, [imageData]);
 
-  // ✅ NEW: listen for printer selection from Electron menu
   useEffect(() => {
-    console.log("window.electron:", window.electron);
-    // ✅ Get existing printer (important fix)
+    // Load existing printer selection
     if (window.electron?.getSelectedPrinter) {
       window.electron.getSelectedPrinter().then((printer) => {
         if (printer) {
@@ -33,16 +30,33 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
       });
     }
 
-    // ✅ Listen for updates
+    // Listen for printer selection updates from menu
+    let unsubscribePrinter;
     if (window.electron?.onPrinterSelected) {
-      const unsubscribe = window.electron.onPrinterSelected((printer) => {
+      unsubscribePrinter = window.electron.onPrinterSelected((printer) => {
         console.log("Received printer:", printer);
         setSelectedPrinter(printer);
-        toast.success(`Printer: ${printer}`);
+        toast.success(`Printer connected: ${printer}`);
       });
-
-      return unsubscribe;
     }
+
+    // Listen for print result from main process
+    let unsubscribePrintResult;
+    if (window.electron?.onPrintResult) {
+      unsubscribePrintResult = window.electron.onPrintResult(({ success, reason }) => {
+        setIsPrinting(false);
+        if (success) {
+          toast.success("Photo printed successfully!");
+        } else {
+          toast.error(`Print failed: ${reason || "Unknown error"}`);
+        }
+      });
+    }
+
+    return () => {
+      unsubscribePrinter?.();
+      unsubscribePrintResult?.();
+    };
   }, []);
 
   const uploadToCloudinary = async (base64Data) => {
@@ -54,7 +68,7 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-        { method: "POST", body: formData },
+        { method: "POST", body: formData }
       );
 
       const data = await response.json();
@@ -62,7 +76,7 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
 
       const downloadUrl = data.secure_url.replace(
         "/upload/",
-        "/upload/fl_attachment/",
+        "/upload/fl_attachment/"
       );
       setCloudinaryUrl(downloadUrl);
       return data;
@@ -77,28 +91,31 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
       .finally(() => setIsUploading(false));
   };
 
-  // 🔥 UPDATED PRINT LOGIC ONLY
   const handlePrint = () => {
     if (!imageData) {
       toast.error("No photo found to print!");
       return;
     }
-    console.log(selectedPrinter);
-    // ✅ ensure printer selected
+
     if (!selectedPrinter) {
-      toast.error("Please select a printer first!");
+      toast.error("Please select a printer from Settings → Connect Printer");
+      return;
+    }
+
+    if (isPrinting) {
+      toast("Already printing, please wait...");
       return;
     }
 
     try {
-      // ✅ send to Electron instead of window.print()
+      setIsPrinting(true);
       window.electron?.printImage({
         image: imageData,
         printerName: selectedPrinter,
       });
-
-      toast.success("Sending to printer...");
+      toast.loading("Sending to printer...", { id: "print-toast", duration: 5000 });
     } catch (error) {
+      setIsPrinting(false);
       console.error("Printer Error:", error);
       toast.error("Printer not available or connection failed.");
     }
@@ -147,6 +164,15 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
           />
         </div>
 
+        {/* Printer status indicator */}
+        <p className="text-[10px] text-center mb-2 px-2">
+          {selectedPrinter ? (
+            <span className="text-slate-900 font-bold">{selectedPrinter}</span>
+          ) : (
+            <span className="text-slate-400">No printer selected</span>
+          )}
+        </p>
+
         <div className="w-full text-center max-w-[240px] flex flex-col gap-2">
           <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 mb-2 px-2 leading-tight">
             {cloudinaryUrl ? "Scan to Download" : "Uploading..."}
@@ -160,9 +186,10 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
           </button>
           <button
             onClick={handlePrint}
-            className="w-full py-3 px-6 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all shadow-xl hover:bg-indigo-50 hover:text-slate-900 border border-white/20"
+            disabled={isPrinting || !selectedPrinter}
+            className="w-full py-3 px-6 disabled:opacity-40 bg-slate-900 text-white rounded-xl font-black uppercase tracking-widest text-[11px] active:scale-95 transition-all shadow-xl hover:bg-indigo-50 hover:text-slate-900 border border-white/20"
           >
-            print Photo
+            {isPrinting ? "Printing..." : "Print Photo"}
           </button>
         </div>
       </div>
