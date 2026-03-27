@@ -196,7 +196,7 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
       silent: !virtual,
       printBackground: true,
       deviceName: printerName,
-      pageSize: "A4",
+      pageSize: { width: 101600, height: 152400 }, // ← 4×6 inch - DNP format is required not A4
       margins: { marginType: "none" },
       scaleFactor: 100
     },
