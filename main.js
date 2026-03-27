@@ -118,7 +118,7 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
         width: 101.6mm;
         height: 152.4mm;
         display: block;
-        object-fit: cover;  /* cover fills fully, no white bars */
+        object-fit: fill;
       }
       @page { 
         size: 101.6mm 152.4mm;
@@ -204,7 +204,8 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
       deviceName: printerName,
       pageSize: { width: 101600, height: 152400 }, // ← 4×6 inch - DNP format is required not A4
       margins: { marginType: "none" },
-      scaleFactor: 100
+      scaleFactor: 100,
+      landscape: false
     },
     (success, failureReason) => {
       fs.unlink(tmpFile, () => {});
