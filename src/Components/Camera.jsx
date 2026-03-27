@@ -63,7 +63,7 @@ export default function Camera() {
   const [capturedImage, setCapturedImage] = useState(null);
   const [selectedCeleb, setSelectedCeleb] = useState(null);
   const [showCelebPanel, setShowCelebPanel] = useState(false);
-  const [isLandscape, setIsLandscape] = useState(false); // ✅ default portrait for photo booth
+  const [isLandscape, setIsLandscape] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
 
   const [scale, setScale] = useState(1);
@@ -87,7 +87,6 @@ export default function Camera() {
     livePos.current = { x: newX, y: newY };
   };
 
-  // ✅ Camera starts once only — never restarts on isLandscape change
   useEffect(() => {
     startCamera();
   }, []);
@@ -97,7 +96,6 @@ export default function Camera() {
       if (videoRef.current?.srcObject) {
         videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
       }
-      // ✅ Always fixed resolution — not tied to isLandscape
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
@@ -112,74 +110,76 @@ export default function Camera() {
   };
 
   const takePhoto = () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (video && canvas) {
-      const context = canvas.getContext("2d");
-      const vWidth = video.videoWidth;
-      const vHeight = video.videoHeight;
-      const cWidth = video.clientWidth;
-      const cHeight = video.clientHeight;
+  const video = videoRef.current;
+  const canvas = canvasRef.current;
+  if (video && canvas) {
+    const context = canvas.getContext("2d");
+    
+    // 1. Get Video's actual internal resolution
+    const vWidth = video.videoWidth;
+    const vHeight = video.videoHeight;
 
-      canvas.width = cWidth * 2;
-      canvas.height = cHeight * 2;
-      context.scale(2, 2);
-
-      setIsFlash(true);
-      setTimeout(() => setIsFlash(false), 150);
-
-      const videoRatio = vWidth / vHeight;
-      const containerRatio = cWidth / cHeight;
-      let sourceX = 0,
-        sourceY = 0,
-        sourceWidth = vWidth,
-        sourceHeight = vHeight;
-
-      if (videoRatio > containerRatio) {
-        sourceWidth = vHeight * containerRatio;
-        sourceX = (vWidth - sourceWidth) / 2;
-      } else {
-        sourceHeight = vWidth / containerRatio;
-        sourceY = (vHeight - sourceHeight) / 2;
-      }
-
-      context.drawImage(
-        video,
-        sourceX,
-        sourceY,
-        sourceWidth,
-        sourceHeight,
-        0,
-        0,
-        cWidth,
-        cHeight,
-      );
-
-      const finalizeCapture = (imgSrc) => {
-        setCapturedImage(imgSrc);
-        setIsFlipped(true);
-      };
-
-      if (selectedCeleb) {
-        const celebImg = new Image();
-        celebImg.src = selectedCeleb.scale || selectedCeleb.url;
-        celebImg.onload = () => {
-          const drawHeight = 400 * scale;
-          const drawWidth = (celebImg.width / celebImg.height) * drawHeight;
-          context.drawImage(
-            celebImg,
-            livePos.current.x,
-            livePos.current.y,
-            drawWidth,
-            drawHeight,
-          );
-          finalizeCapture(canvas.toDataURL("image/png"));
-        };
-      } else {
-        finalizeCapture(canvas.toDataURL("image/png"));
-      }
+    // 2. Set Canvas Size based on Orientation (3:2 Ratio for 6x4 paper)
+    // We use a high base (e.g., 1800px) to ensure sharp 300dpi prints
+    if (isLandscape) {
+      canvas.width = 1800; 
+      canvas.height = 1200;
+    } else {
+      canvas.width = 1200;
+      canvas.height = 1800;
     }
-  };
+
+    setIsFlash(true);
+    setTimeout(() => setIsFlash(false), 150);
+
+    // 3. Logic to "Cover" the canvas with the video feed (No stretching)
+    const canvasRatio = canvas.width / canvas.height;
+    const videoRatio = vWidth / vHeight;
+    let sX = 0, sY = 0, sW = vWidth, sH = vHeight;
+
+    if (videoRatio > canvasRatio) {
+      sW = vHeight * canvasRatio;
+      sX = (vWidth - sW) / 2;
+    } else {
+      sH = vWidth / canvasRatio;
+      sY = (vHeight - sH) / 2;
+    }
+
+    context.save();
+    
+    // MIRROR FIX: 
+    // The video is mirrored in UI for the user, but for the print, 
+    // we capture it "natural" (non-mirrored) so text is readable.
+    context.drawImage(video, sX, sY, sW, sH, 0, 0, canvas.width, canvas.height);
+    
+    context.restore();
+
+    const finalizeCapture = (imgSrc) => {
+      setCapturedImage(imgSrc);
+      setIsFlipped(true);
+    };
+
+    // 4. Draw Celebrity Overlay
+    if (selectedCeleb) {
+      const celebImg = new Image();
+      celebImg.src = selectedCeleb.scale || selectedCeleb.url;
+      celebImg.onload = () => {
+        // We scale the celeb relative to the canvas height
+        const drawHeight = (400 * scale) * (canvas.height / video.clientHeight);
+        const drawWidth = (celebImg.width / celebImg.height) * drawHeight;
+        
+        // Map UI position to Canvas position
+        const drawX = (livePos.current.x / video.clientWidth) * canvas.width;
+        const drawY = (livePos.current.y / video.clientHeight) * canvas.height;
+
+        context.drawImage(celebImg, drawX, drawY, drawWidth, drawHeight);
+        finalizeCapture(canvas.toDataURL("image/png"));
+      };
+    } else {
+      finalizeCapture(canvas.toDataURL("image/png"));
+    }
+  }
+};
 
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-screen bg-slate-950 p-4 overflow-hidden select-none text-white font-sans">
@@ -208,7 +208,6 @@ export default function Camera() {
               ref={constraintsRef}
               className="relative overflow-hidden rounded-[2rem] bg-stone-950"
               style={{
-                // ✅ Fixed size always — never changes based on isLandscape
                 height: "85vh",
                 width: "calc(85vh * 16 / 9)",
                 maxHeight: "100%",
@@ -265,7 +264,6 @@ export default function Camera() {
                   <div />
                 )}
 
-                {/* ✅ Only toasts on toggle — no layout/camera change */}
                 <button
                   onClick={() => {
                     const newMode = !isLandscape;

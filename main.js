@@ -121,15 +121,14 @@ ipcMain.on("print-image", async (event, { image, printerName, landscape }) => {
         width: 100%;
         height: 100%;
         overflow: hidden;
-      }
-      body {
         background: white;
       }
       img {
         width: 100vw;
         height: 100vh;
         display: block;
-        object-fit: fill;
+        /* FIX: 'cover' ensures no stretching. It crops the 16:9 edges to fit 3:2 paper */
+        object-fit: cover; 
       }
       @page {
         size: ${landscape ? "152.4mm 101.6mm landscape" : "101.6mm 152.4mm portrait"};
@@ -141,12 +140,8 @@ ipcMain.on("print-image", async (event, { image, printerName, landscape }) => {
     <img id="photo" src="${image}" />
     <script>
       const img = document.getElementById('photo');
-      if (img.complete) {
-        document.title = 'ready';
-      } else {
-        img.onload = () => { document.title = 'ready'; };
-        img.onerror = () => { document.title = 'error'; };
-      }
+      img.onload = () => { document.title = 'ready'; };
+      img.onerror = () => { document.title = 'error'; };
     </script>
   </body>
 </html>`;
@@ -210,7 +205,7 @@ ipcMain.on("print-image", async (event, { image, printerName, landscape }) => {
 
   printWindow.webContents.print(
     {
-      silent: !virtual,
+      silent: false,
       printBackground: true,
       deviceName: printerName,
       pageSize: landscape
