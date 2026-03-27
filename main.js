@@ -104,7 +104,10 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
   <head>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { width: 100%; height: 100%; }
+      html, body { 
+        width: 101.6mm; 
+        height: 152.4mm;
+      }
       body {
         display: flex;
         justify-content: center;
@@ -112,12 +115,15 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
         background: white;
       }
       img {
-        width: 100%;
-        height: auto;
+        width: 101.6mm;
+        height: 152.4mm;
         display: block;
-        object-fit: contain;
+        object-fit: cover;  /* cover fills fully, no white bars */
       }
-      @page { margin: 0; }
+      @page { 
+        size: 101.6mm 152.4mm;
+        margin: 0; 
+      }
     </style>
   </head>
   <body>
