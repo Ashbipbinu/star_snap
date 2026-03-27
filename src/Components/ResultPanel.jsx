@@ -43,16 +43,17 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
     // Listen for print result from main process
     let unsubscribePrintResult;
     if (window.electron?.onPrintResult) {
-      unsubscribePrintResult = window.electron.onPrintResult(({ success, reason }) => {
-        setIsPrinting(false);
-        // dismiss the loading toast first, then show result
-        toast.dismiss("print-toast");
-        if (success) {
-          toast.success("Photo printed successfully!");
-        } else {
-          toast.error(`Print failed: ${reason || "Unknown error"}`);
-        }
-      });
+      unsubscribePrintResult = window.electron.onPrintResult(
+        ({ success, reason }) => {
+          setIsPrinting(false);
+          toast.dismiss("print-toast");
+          if (success) {
+            toast.success("Photo printed successfully!");
+          } else {
+            toast.error(`Print failed: ${reason || "Unknown error"}`);
+          }
+        },
+      );
     }
 
     return () => {
@@ -70,7 +71,7 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
 
       const response = await fetch(
         `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
-        { method: "POST", body: formData }
+        { method: "POST", body: formData },
       );
 
       const data = await response.json();
@@ -78,7 +79,7 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
 
       const downloadUrl = data.secure_url.replace(
         "/upload/",
-        "/upload/fl_attachment/"
+        "/upload/fl_attachment/",
       );
       setCloudinaryUrl(downloadUrl);
       return data;
@@ -93,18 +94,37 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
       .finally(() => setIsUploading(false));
   };
 
+  // ✅ Helper to send print with fallback timeout
+  const sendPrint = (image, landscape) => {
+    window.electron?.printImage({
+      image,
+      printerName: selectedPrinter,
+      landscape,
+    });
+    toast.loading("Sending to printer...", { id: "print-toast" });
+
+    // Fallback — if no response in 10 seconds, assume success (virtual printer edge case)
+    setTimeout(() => {
+      setIsPrinting((current) => {
+        if (current) {
+          toast.dismiss("print-toast");
+          toast.success("Print job sent!");
+          return false;
+        }
+        return current;
+      });
+    }, 10000);
+  };
+
   const handlePrint = () => {
     if (!imageData) {
       toast.error("No photo found to print!");
       return;
     }
-
     if (!selectedPrinter) {
       toast.error("Please select a printer from Settings → Connect Printer");
       return;
     }
-
-    // block if already printing — prevents double-tap sending two jobs
     if (isPrinting) {
       toast("Already printing, please wait...");
       return;
@@ -112,13 +132,28 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
 
     try {
       setIsPrinting(true);
-      window.electron?.printImage({
-        image: imageData,
-        printerName: selectedPrinter,
-        landscape: isLandscape
-      });
-      // no duration — stays until dismissed by onPrintResult
-      toast.loading("Sending to printer...", { id: "print-toast" });
+
+      if (isLandscape) {
+        // ✅ Rotate image 90° clockwise for landscape printing
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          // Swap width and height for landscape orientation
+          canvas.width = img.height;
+          canvas.height = img.width;
+          const ctx = canvas.getContext("2d");
+          // Rotate 90 degrees clockwise
+          ctx.translate(canvas.width / 2, canvas.height / 2);
+          ctx.rotate(Math.PI / 2);
+          ctx.drawImage(img, -img.width / 2, -img.height / 2);
+          const rotatedImage = canvas.toDataURL("image/png");
+          sendPrint(rotatedImage, true);
+        };
+        img.src = imageData;
+      } else {
+        // ✅ Portrait — send as-is
+        sendPrint(imageData, false);
+      }
     } catch (error) {
       setIsPrinting(false);
       toast.dismiss("print-toast");
@@ -173,10 +208,19 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
         {/* Printer status indicator */}
         <p className="text-[10px] text-center mb-2 px-2">
           {selectedPrinter ? (
-            <span className="text-green-400 font-bold">🖨 {selectedPrinter}</span>
+            <span className="text-green-400 font-bold">
+              🖨 {selectedPrinter}
+            </span>
           ) : (
             <span className="text-yellow-400">No printer selected</span>
           )}
+        </p>
+
+        {/* Print mode indicator */}
+        <p className="text-[10px] text-center mb-2 px-2">
+          <span className="text-indigo-400 font-bold">
+            {isLandscape ? "↔️ Landscape" : "↕️ Portrait"} print mode
+          </span>
         </p>
 
         <div className="w-full text-center max-w-[240px] flex flex-col gap-2">

@@ -63,7 +63,7 @@ export default function Camera() {
   const [capturedImage, setCapturedImage] = useState(null);
   const [selectedCeleb, setSelectedCeleb] = useState(null);
   const [showCelebPanel, setShowCelebPanel] = useState(false);
-  const [isLandscape, setIslandscape] = useState(true);
+  const [isLandscape, setIsLandscape] = useState(false); // ✅ default portrait for photo booth
   const [isFlipped, setIsFlipped] = useState(false);
 
   const [scale, setScale] = useState(1);
@@ -87,19 +87,19 @@ export default function Camera() {
     livePos.current = { x: newX, y: newY };
   };
 
+  // ✅ Camera starts once only — never restarts on isLandscape change
   useEffect(() => {
     startCamera();
-  }, [isLandscape]);
+  }, []);
 
   const startCamera = async () => {
     try {
       if (videoRef.current?.srcObject) {
         videoRef.current.srcObject.getTracks().forEach((track) => track.stop());
       }
+      // ✅ Always fixed resolution — not tied to isLandscape
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: isLandscape
-          ? { width: { ideal: 1280 }, height: { ideal: 720 } }
-          : { width: { ideal: 720 }, height: { ideal: 1280 } },
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false,
       });
       if (videoRef.current) {
@@ -206,12 +206,11 @@ export default function Camera() {
           >
             <div
               ref={constraintsRef}
-              className="relative overflow-hidden rounded-[2rem] bg-stone-950 transition-all duration-700 ease-in-out"
+              className="relative overflow-hidden rounded-[2rem] bg-stone-950"
               style={{
+                // ✅ Fixed size always — never changes based on isLandscape
                 height: "85vh",
-                width: isLandscape
-                  ? "calc(min(80vh, 650px) * 16 / 9)"
-                  : "calc(min(100vh, 650px) * 9 / 16)",
+                width: "calc(85vh * 16 / 9)",
                 maxHeight: "100%",
                 maxWidth: "90vw",
               }}
@@ -266,8 +265,16 @@ export default function Camera() {
                   <div />
                 )}
 
+                {/* ✅ Only toasts on toggle — no layout/camera change */}
                 <button
-                  onClick={() => setIslandscape(!isLandscape)}
+                  onClick={() => {
+                    const newMode = !isLandscape;
+                    setIsLandscape(newMode);
+                    toast.success(
+                      newMode ? "↔️ Landscape print mode" : "↕️ Portrait print mode",
+                      { duration: 2000 }
+                    );
+                  }}
                   className="p-4 rounded-2xl bg-black/30 backdrop-blur-xl border border-white/10 text-white pointer-events-auto active:scale-95 transition-all shadow-xl"
                 >
                   <svg

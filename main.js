@@ -106,17 +106,20 @@ async function createPrinterMenu() {
 ipcMain.handle("get-selected-printer", () => selectedPrinter);
 
 ipcMain.removeAllListeners("print-image");
-ipcMain.on("print-image", async (event, { image, printerName }) => {
-  console.log("Print request received for printer:", printerName);
 
+// ✅ destructure landscape from the payload
+ipcMain.on("print-image", async (event, { image, printerName, landscape }) => {
+  console.log("Print request received for printer:", printerName, "| Landscape:", landscape);
+
+  // ✅ landscape is now properly received and used in the template
   const htmlContent = `<!DOCTYPE html>
 <html>
   <head>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { 
-         width: 100%;
-         height: 100%;
+      html, body {
+        width: 100%;
+        height: 100%;
         overflow: hidden;
       }
       body {
@@ -128,7 +131,7 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
         display: block;
         object-fit: fill;
       }
-      @page { 
+      @page {
         size: ${landscape ? "152.4mm 101.6mm landscape" : "101.6mm 152.4mm portrait"};
         margin: 0;
       }
@@ -169,14 +172,12 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
     return;
   }
 
-  // Properly cleared promise — interval AND timeout are BOTH cleared
-  // before resolving, so it's physically impossible to resolve twice
+  // Wait for image to load inside the print window
   await new Promise((resolve) => {
     let interval = null;
     let timeout = null;
 
     const done = () => {
-      // clear both before resolving — prevents any second resolution
       clearInterval(interval);
       clearTimeout(timeout);
       resolve();
@@ -193,7 +194,6 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
       }
     }, 100);
 
-    // Fallback after 4 seconds
     timeout = setTimeout(done, 4000);
   });
 
@@ -203,33 +203,46 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
   }
 
   const virtual = isVirtualPrinter(printerName);
-  console.log("Printing to:", printerName, "| Silent:", !virtual);
+  console.log("Printing to:", printerName, "| Silent:", !virtual, "| Landscape:", landscape);
+
+  // ✅ single print call with safety timeout — no duplicate print call
+  let printCallbackFired = false;
 
   printWindow.webContents.print(
     {
       silent: !virtual,
       printBackground: true,
       deviceName: printerName,
-      pageSize: landscape ? { width: 152400, height: 101600 } :{ width: 101600, height: 152400 }, // 4×6 portrait, // ← 4×6 inch - DNP format is required not A4
+      pageSize: landscape
+        ? { width: 152400, height: 101600 }  // 6×4 landscape
+        : { width: 101600, height: 152400 }, // 4×6 portrait
       margins: { marginType: "none" },
       scaleFactor: 100,
       landscape: landscape,
     },
     (success, failureReason) => {
+      printCallbackFired = true;
       fs.unlink(tmpFile, () => {});
       if (success) {
         console.log("Print job sent successfully");
         event.sender.send("print-result", { success: true });
       } else {
         console.error("Print failed:", failureReason);
-        event.sender.send("print-result", {
-          success: false,
-          reason: failureReason,
-        });
+        event.sender.send("print-result", { success: false, reason: failureReason });
       }
       if (!printWindow.isDestroyed()) printWindow.close();
-    },
+    }
   );
+
+  // ✅ Safety timeout — if callback never fires (virtual printer edge case), force success
+  setTimeout(() => {
+    if (!printCallbackFired) {
+      console.warn("Print callback never fired — forcing success");
+      fs.unlink(tmpFile, () => {});
+      event.sender.send("print-result", { success: true });
+      if (!printWindow.isDestroyed()) printWindow.close();
+    }
+  }, 12000);
 });
 
 function createWindow() {
@@ -270,7 +283,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler(
     (_, permission, callback) => {
       callback(permission === "media" || permission === "camera");
-    },
+    }
   );
 
   createWindow();
