@@ -1,5 +1,7 @@
 import { app, BrowserWindow, protocol, net, session, Menu, ipcMain } from "electron";
 import path from "path";
+import fs from "fs";
+import os from "os";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -55,7 +57,6 @@ async function createPrinterMenu() {
       }
     }));
 
-    // Auto-select default printer on first load
     if (!selectedPrinter) {
       const defaultPrinter = printers.find((p) => p.isDefault);
       if (defaultPrinter) {
@@ -94,29 +95,16 @@ async function createPrinterMenu() {
 
 ipcMain.handle("get-selected-printer", () => selectedPrinter);
 
-// ✅ FIXED: robust print using loadURL with a print-specific scheme
+ipcMain.removeAllListeners("print-image");
 ipcMain.on("print-image", async (event, { image, printerName }) => {
   console.log("Print request received for printer:", printerName);
 
-  const printWindow = new BrowserWindow({
-    show: false,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true
-    }
-  });
-
-  // ✅ Build a clean HTML string and load it via loadURL as a data URI
-  // Use encodeURIComponent to safely embed into data: URL
   const htmlContent = `<!DOCTYPE html>
 <html>
   <head>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body {
-        width: 100%;
-        height: 100%;
-      }
+      html, body { width: 100%; height: 100%; }
       body {
         display: flex;
         justify-content: center;
@@ -129,15 +117,12 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
         display: block;
         object-fit: contain;
       }
-      @page {
-        margin: 0;
-      }
+      @page { margin: 0; }
     </style>
   </head>
   <body>
     <img id="photo" src="${image}" />
     <script>
-      // Signal when image is fully loaded and rendered
       const img = document.getElementById('photo');
       if (img.complete) {
         document.title = 'ready';
@@ -149,41 +134,74 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
   </body>
 </html>`;
 
-  // ✅ Use loadURL with data: URI — works reliably for base64 images
-  await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+  const tmpFile = path.join(os.tmpdir(), `print_${Date.now()}.html`);
+  fs.writeFileSync(tmpFile, htmlContent, "utf-8");
 
-  // ✅ Wait for the image to signal it's ready via title change
+  const printWindow = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  try {
+    await printWindow.loadFile(tmpFile);
+  } catch (err) {
+    console.error("Failed to load print file:", err);
+    fs.unlink(tmpFile, () => {});
+    if (!printWindow.isDestroyed()) printWindow.close();
+    event.sender.send("print-result", { success: false, reason: err.message });
+    return;
+  }
+
+  // Properly cleared promise — interval AND timeout are BOTH cleared
+  // before resolving, so it's physically impossible to resolve twice
   await new Promise((resolve) => {
-    const checkReady = setInterval(() => {
+    let interval = null;
+    let timeout = null;
+
+    const done = () => {
+      // clear both before resolving — prevents any second resolution
+      clearInterval(interval);
+      clearTimeout(timeout);
+      resolve();
+    };
+
+    interval = setInterval(() => {
+      if (printWindow.isDestroyed()) {
+        done();
+        return;
+      }
       const title = printWindow.webContents.getTitle();
       if (title === "ready" || title === "error") {
-        clearInterval(checkReady);
-        resolve();
+        done();
       }
     }, 100);
 
-    // Fallback: proceed after 4 seconds regardless
-    setTimeout(() => {
-      clearInterval(checkReady);
-      resolve();
-    }, 4000);
+    // Fallback after 4 seconds
+    timeout = setTimeout(done, 4000);
   });
+
+  if (printWindow.isDestroyed()) {
+    fs.unlink(tmpFile, () => {});
+    return;
+  }
 
   const virtual = isVirtualPrinter(printerName);
   console.log("Printing to:", printerName, "| Silent:", !virtual);
 
   printWindow.webContents.print(
     {
-      silent: !virtual,         // silent=true for real printers, show dialog for virtual (PDF etc.)
+      silent: !virtual,
       printBackground: true,
       deviceName: printerName,
-      pageSize: "A4",           // Change to "4x6" or custom size if using photo paper
-      margins: {
-        marginType: "none"      // No margins — full bleed photo print
-      },
+      pageSize: "A4",
+      margins: { marginType: "none" },
       scaleFactor: 100
     },
     (success, failureReason) => {
+      fs.unlink(tmpFile, () => {});
       if (success) {
         console.log("Print job sent successfully");
         event.sender.send("print-result", { success: true });
@@ -191,7 +209,7 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
         console.error("Print failed:", failureReason);
         event.sender.send("print-result", { success: false, reason: failureReason });
       }
-      printWindow.close();
+      if (!printWindow.isDestroyed()) printWindow.close();
     }
   );
 });

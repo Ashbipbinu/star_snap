@@ -45,6 +45,8 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
     if (window.electron?.onPrintResult) {
       unsubscribePrintResult = window.electron.onPrintResult(({ success, reason }) => {
         setIsPrinting(false);
+        // dismiss the loading toast first, then show result
+        toast.dismiss("print-toast");
         if (success) {
           toast.success("Photo printed successfully!");
         } else {
@@ -102,6 +104,7 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
       return;
     }
 
+    // block if already printing — prevents double-tap sending two jobs
     if (isPrinting) {
       toast("Already printing, please wait...");
       return;
@@ -113,9 +116,11 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
         image: imageData,
         printerName: selectedPrinter,
       });
-      toast.loading("Sending to printer...", { id: "print-toast", duration: 5000 });
+      // no duration — stays until dismissed by onPrintResult
+      toast.loading("Sending to printer...", { id: "print-toast" });
     } catch (error) {
       setIsPrinting(false);
+      toast.dismiss("print-toast");
       console.error("Printer Error:", error);
       toast.error("Printer not available or connection failed.");
     }
@@ -167,9 +172,9 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
         {/* Printer status indicator */}
         <p className="text-[10px] text-center mb-2 px-2">
           {selectedPrinter ? (
-            <span className="text-slate-900 font-bold">{selectedPrinter}</span>
+            <span className="text-green-400 font-bold">🖨 {selectedPrinter}</span>
           ) : (
-            <span className="text-slate-400">No printer selected</span>
+            <span className="text-yellow-400">No printer selected</span>
           )}
         </p>
 
