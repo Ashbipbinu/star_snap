@@ -115,6 +115,7 @@ export default function ResultPanel({ imageData, onReset, isLandscape }) {
       window.electron?.printImage({
         image: imageData,
         printerName: selectedPrinter,
+        landscape: isLandscape
       });
       // no duration — stays until dismissed by onPrintResult
       toast.loading("Sending to printer...", { id: "print-toast" });

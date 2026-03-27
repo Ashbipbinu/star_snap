@@ -129,8 +129,8 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
         object-fit: fill;
       }
       @page { 
-        size: 101.6mm 152.4mm portrait;
-        margin: 0; 
+        size: ${landscape ? "152.4mm 101.6mm landscape" : "101.6mm 152.4mm portrait"};
+        margin: 0;
       }
     </style>
   </head>
@@ -210,10 +210,10 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
       silent: !virtual,
       printBackground: true,
       deviceName: printerName,
-      pageSize: { width: 101600, height: 152400 }, // ← 4×6 inch - DNP format is required not A4
+      pageSize: landscape ? { width: 152400, height: 101600 } :{ width: 101600, height: 152400 }, // 4×6 portrait, // ← 4×6 inch - DNP format is required not A4
       margins: { marginType: "none" },
       scaleFactor: 100,
-      landscape: false,
+      landscape: landscape,
     },
     (success, failureReason) => {
       fs.unlink(tmpFile, () => {});
