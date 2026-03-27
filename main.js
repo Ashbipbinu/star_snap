@@ -1,4 +1,12 @@
-import { app, BrowserWindow, protocol, net, session, Menu, ipcMain } from "electron";
+import {
+  app,
+  BrowserWindow,
+  protocol,
+  net,
+  session,
+  Menu,
+  ipcMain,
+} from "electron";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -17,9 +25,9 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       supportFetchAPI: true,
-      corsEnabled: true
-    }
-  }
+      corsEnabled: true,
+    },
+  },
 ]);
 
 function isVirtualPrinter(name) {
@@ -49,12 +57,14 @@ async function createPrinterMenu() {
     const printerMenuItems = printers.map((printer) => ({
       label: printer.name,
       type: "radio",
-      checked: printer.name === selectedPrinter || (!selectedPrinter && printer.isDefault),
+      checked:
+        printer.name === selectedPrinter ||
+        (!selectedPrinter && printer.isDefault),
       click: () => {
         selectedPrinter = printer.name;
         console.log("Selected:", printer.name);
         sendToRenderer("printer-selected", printer.name);
-      }
+      },
     }));
 
     if (!selectedPrinter) {
@@ -75,16 +85,16 @@ async function createPrinterMenu() {
             submenu:
               printerMenuItems.length > 0
                 ? printerMenuItems
-                : [{ label: "No Printers Found", enabled: false }]
+                : [{ label: "No Printers Found", enabled: false }],
           },
           { type: "separator" },
           { label: "Reload Printers", click: () => createPrinterMenu() },
           { type: "separator" },
-          { role: "quit" }
-        ]
+          { role: "quit" },
+        ],
       },
       { label: "Edit", role: "editMenu" },
-      { label: "View", role: "viewMenu" }
+      { label: "View", role: "viewMenu" },
     ];
 
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -105,23 +115,21 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { 
-        width: 101.6mm; 
-        height: 152.4mm;
+         width: 100%;
+         height: 100%;
+        overflow: hidden;
       }
       body {
-        display: flex;
-        justify-content: center;
-        align-items: center;
         background: white;
       }
       img {
-        width: 101.6mm;
-        height: 152.4mm;
+        width: 100vw;
+        height: 100vh;
         display: block;
         object-fit: fill;
       }
       @page { 
-        size: 101.6mm 152.4mm;
+        size: 101.6mm 152.4mm portrait;
         margin: 0; 
       }
     </style>
@@ -147,8 +155,8 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
     show: false,
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true
-    }
+      contextIsolation: true,
+    },
   });
 
   try {
@@ -205,7 +213,7 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
       pageSize: { width: 101600, height: 152400 }, // ← 4×6 inch - DNP format is required not A4
       margins: { marginType: "none" },
       scaleFactor: 100,
-      landscape: false
+      landscape: false,
     },
     (success, failureReason) => {
       fs.unlink(tmpFile, () => {});
@@ -214,10 +222,13 @@ ipcMain.on("print-image", async (event, { image, printerName }) => {
         event.sender.send("print-result", { success: true });
       } else {
         console.error("Print failed:", failureReason);
-        event.sender.send("print-result", { success: false, reason: failureReason });
+        event.sender.send("print-result", {
+          success: false,
+          reason: failureReason,
+        });
       }
       if (!printWindow.isDestroyed()) printWindow.close();
-    }
+    },
   );
 });
 
@@ -229,8 +240,8 @@ function createWindow() {
       preload: path.resolve(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
-    }
+      sandbox: false,
+    },
   });
 
   const startUrl = app.isPackaged
@@ -256,9 +267,11 @@ app.whenReady().then(() => {
     return permission === "media" || permission === "camera";
   });
 
-  session.defaultSession.setPermissionRequestHandler((_, permission, callback) => {
-    callback(permission === "media" || permission === "camera");
-  });
+  session.defaultSession.setPermissionRequestHandler(
+    (_, permission, callback) => {
+      callback(permission === "media" || permission === "camera");
+    },
+  );
 
   createWindow();
 });
